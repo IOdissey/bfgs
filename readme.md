@@ -71,7 +71,7 @@ bfgs.set_stop_grad_eps(1e-7);
 ```
 
 ---
-Stop criterion. The amount the feature changes between iterations.<br/>
+Stop criterion. The function change size between iterations.<br/>
 Default: 1e-7.
 ```
 bfgs.set_stop_step_eps(1e-7);
