@@ -541,7 +541,7 @@ public:
 	}
 
 	// Use Strong Wolfe conditions.
-	// Defaul: false.
+	// Defaul: true.
 	void set_strong_wolfe(bool use_strong_wolfe)
 	{
 		_use_strong_wolfe = use_strong_wolfe;
