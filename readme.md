@@ -153,8 +153,9 @@ bfgs.set_memory_save(true);
 ```
 
 ---
-Use Strong Wolfe conditions.<br/>
-Defaul: false.
+Use the strong Wolfe conditions (true).<br/>
+Use the normal Wolfe condition (false).
+Defaul: true.
 ```
 bfgs.set_strong_wolfe(true);
 ```

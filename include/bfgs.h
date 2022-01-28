@@ -33,7 +33,7 @@ private:
 	double _step_tweak = 0.0;       // Initial step value tweak (if _step_tweak > 0.0).
 	bool _reuse_hessian = false;    // Reuse hessian from last time.
 	bool _memory_save = false;      // Store only the upper triangular matrix for the inverse hessian.
-	bool _use_strong_wolfe = false; // Use Strong Wolfe conditions.
+	bool _use_strong_wolfe = true;  // Use Strong Wolfe conditions.
 	
 	// Diagonal matrix.
 	void _diag(double* m, const double val = 1.0) const
@@ -326,10 +326,13 @@ private:
 			double& ai,
 			double* const g) const
 	{
+		// 0 < c1 < c2 < 1
 		// Strong Wolfe conditions.
 		// f(x + a * p) <= f(x) + c1 * a * grad(f(x))^T * p
 		// |grad(f(x + a * p))^T * p| <= c2 * |grad(f(x))^T * p|
-		// 0 < c1 < c2 < 1
+		// Normal Wolfe condition.
+		// f(x + a * p) <= f(x) + c1 * a * grad(f(x))^T * p
+		// grad(f(x + a * p))^T * p >= c2 * grad(f(x))^T * p
 		// Preparing constants.
 		// d = grad(f(x))^T * p
 		// k1 = c1 * d = c1 * grad(f(x))^T * p
@@ -387,7 +390,7 @@ private:
 		for (; line_iter < _line_iter_max; ++line_iter)
 		{
 			// TODO. Some thresholds to avoid extreme points.
-			ai = _poly(a, b, fa, ga, fb, gb, 0.001, 0.999);
+			ai = _poly(a, b, fa, ga, fb, gb, 0.1, 0.9);
 			_f_info(f, x, p, ai, xi, fi, gi, g);
 			//
 			if (fi > fa || fi > y + b * k1)
