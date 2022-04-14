@@ -9,25 +9,33 @@
 #include <functional>
 #include <limits>
 
+#include "memory.h"
+#include "dval.h"
+
+
+// 
 class BFGS
 {
 private:
-	int _n = 0;                     // Problem dimension.
+	uint32_t _n = 0;                // Problem dimension.
 	double* _ptr = nullptr;         // Memory for all value.
 	double* _g = nullptr;           // The gradient value.
 	double* _dg = nullptr;          // The gradient increment.
 	double* _p = nullptr;           // Search direction.
 	double* _xi = nullptr;          // New point.
 	double* _h = nullptr;           // Approximation of the inverse Hessian.
+	Memory* _mem = nullptr;         // Memory management for automatic derivative.
+	DVal* _dval = nullptr;          // Automatic derivative.
+	uint32_t _dval_n = 0;           // Used to check the creation of DVal variables.
 
 	double _min_f = std::numeric_limits<double>::infinity();
 	double _stop_grad_eps = 1e-7;   // Stop criteria.
-	double _stop_step_eps = 1e-7;   // Stop criteria.
+	double _stop_step_eps = 1e-9;   // Stop criteria.
 	double _eps = 1e-8;             // Increment for calculating the derivative and another. TODO. Use different values.
-	int _max_iter = 1000;           // Maximum number of algorithm iterations.
+	uint32_t _max_iter = 1000;      // Maximum number of algorithm iterations.
 	double _c1 = 0.01;              // Constant for checking the Wolfe condition.
 	double _c2 = 0.9;               // Constant for checking the Wolfe condition.
-	int _line_iter_max = 100;       // Maximum number of linear search iterations.
+	uint32_t _line_iter_max = 100;  // Maximum number of linear search iterations.
 	bool _central_diff = true;      // Central difference.
 	bool _line_central_diff = true; // Central difference.
 	const double _db = 2.0;         // Upper bound increment multiplier.
@@ -35,6 +43,7 @@ private:
 	bool _reuse_hessian = false;    // Reuse hessian from last time.
 	bool _memory_save = false;      // Store only the upper triangular matrix for the inverse hessian.
 	bool _use_strong_wolfe = true;  // Use Strong Wolfe conditions.
+	uint32_t _dval_size = 100;      // Specifies the amount of memory for automatic derivative.
 	
 	// Diagonal matrix.
 	void _diag(double* m, const double val = 1.0) const
@@ -50,10 +59,10 @@ private:
 		}
 		else
 		{
-			const int nn = _n * _n;
-			const int step = _n + 1;
+			const uint32_t nn = _n * _n;
+			const uint32_t step = _n + 1;
 			std::fill_n(m, nn, 0.0);
-			for (int i = 0; i < nn; i += step)
+			for (uint32_t i = 0; i < nn; i += step)
 				m[i] = val;
 		}
 	}
@@ -62,7 +71,7 @@ private:
 	double _norm(const double* v) const
 	{
 		double r = 0.0;
-		for (int i = 0; i < _n; ++i)
+		for (uint32_t i = 0; i < _n; ++i)
 			r += v[i] * v[i];
 		return std::sqrt(r);
 	}
@@ -76,12 +85,12 @@ private:
 			// | - 1 5 8 |
 			// | - - 2 6 |
 			// | - - - 3 |
-			int k = 0;
+			uint32_t k = 0;
 			for (; k < _n; ++k)
 				r[k] = m[k] * v[k];
-			for (int i = 1; i < _n; ++i)
+			for (uint32_t i = 1; i < _n; ++i)
 			{
-				for (int j = i; j < _n; ++j, ++k)
+				for (uint32_t j = i; j < _n; ++j, ++k)
 				{
 					r[j - i] += m[k] * v[j];
 					r[j] += m[k] * v[j - i];
@@ -90,10 +99,10 @@ private:
 		}
 		else
 		{
-			for (int i = 0; i < _n; ++i)
+			for (uint32_t i = 0; i < _n; ++i)
 			{
 				r[i] = 0.0;
-				for (int j = 0; j < _n; ++j, ++m)
+				for (uint32_t j = 0; j < _n; ++j, ++m)
 					r[i] += *m * v[j];
 			}
 		}
@@ -102,7 +111,7 @@ private:
 	// r = v1 + a * v2.
 	void _add_v_av(const double* v1, const double* v2, const double a, double* r) const
 	{
-		for (int i = 0; i < _n; ++i)
+		for (uint32_t i = 0; i < _n; ++i)
 			r[i] = v1[i] + a * v2[i];
 	}
 
@@ -110,7 +119,7 @@ private:
 	double _mull_v_v(const double* v1, const double* v2) const
 	{
 		double r = 0.0;
-		for (int i = 0; i < _n; ++i)
+		for (uint32_t i = 0; i < _n; ++i)
 			r += v1[i] * v2[i];
 		return r;
 	}
@@ -124,26 +133,40 @@ private:
 	// r = v1 - v2.
 	inline void _sub_v_v(const double* const v1, const double* const v2, double* const r) const
 	{
-		for (int i = 0; i < _n; ++i)
+		for (uint32_t i = 0; i < _n; ++i)
 			r[i] = v1[i] - v2[i];
 	}
 
 	// Memory free.
-	inline void _free()
+	void _free_ptr()
 	{
-		if (_ptr)
-		{
-			delete[] _ptr;
-			_ptr = nullptr;
-		}
+		if (!_ptr)
+			return;
+		delete[] _ptr;
+		_ptr = nullptr;
+		_n = 0;
 	}
 
-	void _init(int n)
+	// Memory free.
+	void _free_dval()
+	{
+		if (!_mem)
+			return;
+		if (_dval)
+			delete[] _dval;
+		_dval = nullptr;
+		_dval_n = 0;
+		delete _mem;
+		_mem = nullptr;
+	}
+
+	// Memory init.
+	void _init_ptr(uint32_t n)
 	{
 		if (n != _n)
 		{
+			_free_ptr();
 			_n = n;
-			_free();
 			if (_memory_save)
 				// n * (n + 9) / 2 = 4 * n + n * (n + 1) / 2
 				_ptr = new double[_n * (_n + 9) / 2];
@@ -159,6 +182,40 @@ private:
 		}
 		else if (!_reuse_hessian)
 			_diag(_h);
+	}
+
+	// Memory init.
+	void _init_dval(uint32_t n)
+	{
+		if (n != _dval_n)
+		{
+			_dval_n = n;
+			if (_mem == nullptr)
+				_mem = new Memory(_dval_n, _dval_size);
+			if (_dval)
+				delete[] _dval;
+			_dval = new DVal[_dval_n];
+			for (uint32_t i = 0; i < _n; ++i)
+				_dval[i].set(0.0, i, _mem);
+		}
+	}
+
+	void _init(const std::function<double (double*, uint32_t)>& f, uint32_t n)
+	{
+		_init_ptr(n);
+		_free_dval();
+	}
+
+	void _init(const std::function<double (double*, double*, uint32_t)>& f, uint32_t n)
+	{
+		_init_ptr(n);
+		_free_dval();
+	}
+
+	void _init(const std::function<DVal (DVal*, uint32_t)>& f, uint32_t n)
+	{
+		_init_ptr(n);
+		_init_dval(n);
 	}
 
 	// Cubic approximation for finding the minimum.
@@ -205,8 +262,14 @@ private:
 		// f'(x) = a1 + 2 * a2 * x = 0
 		else if (std::abs(a2) > _eps)
 			x_min = -a1 / (2 * a2);
-		if (x_min < limit_min || x_min > limit_max)
+		if (x_min < 0.0 || x_min > 1.0)
 			x_min = (limit_max + limit_max) / 2;
+		else if (x_min < limit_min)
+			x_min = limit_min;
+		else if (x_min > limit_max)
+			x_min = limit_max;
+		// if (x_min < limit_min || x_min > limit_max)
+		// 	x_min = (limit_max + limit_max) / 2;
 		// Apply scale to the result.
 		return a + x_min * (b - a);
 	}
@@ -221,22 +284,7 @@ private:
 	// ga = df(x + a * p) / da (result).
 	// n - dimension.
 	void _f_info(
-			const std::function<double (double*, double*, int)>& f,
-			const double* const x,
-			const double* const p,
-			const double a,
-			double* const xa,
-			double& fa,
-			double& ga,
-			double* const g) const
-	{
-		_add_v_av(x, p, a, xa);
-		fa = f(xa, g, _n);
-		ga = _mull_v_v(g, p);
-	}
-
-	void _f_info(
-			const std::function<double (double*, int)>& f,
+			const std::function<double (double*, uint32_t)>& f,
 			const double* const x,
 			const double* const p,
 			const double a,
@@ -263,25 +311,61 @@ private:
 		}
 	}
 
-	inline double _f_info(const std::function<double (double*, double*, int)>& f, double* const x, double* const g) const
+	void _f_info(
+			const std::function<double (double*, double*, uint32_t)>& f,
+			const double* const x,
+			const double* const p,
+			const double a,
+			double* const xa,
+			double& fa,
+			double& ga,
+			double* const g) const
 	{
-		return f(x, g, _n);
+		_add_v_av(x, p, a, xa);
+		fa = f(xa, g, _n);
+		ga = _mull_v_v(g, p);
 	}
 
-	inline double _f_info(const std::function<double (double*, int)>& f, double* const x, double* const g) const
+	void _f_info(
+		const std::function<DVal (DVal*, uint32_t)>& f,
+		const double* const x,
+		const double* const p,
+		const double a,
+		double* const xa,
+		double& fa,
+		double& ga,
+		double* const g) const
+	{
+		_add_v_av(x, p, a, xa);
+		fa = _f_info(f, xa, g);
+		ga = _mull_v_v(g, p);
+	}
+
+	inline double _f_info(const std::function<double (double*, uint32_t)>& f, double* const x, double* const g) const
 	{
 		return f(x, _n);
 	}
 
-	inline void _f_grad(const std::function<double (double*, double*, int)>& f, double y, double* const x, double* const g) const
+	inline double _f_info(const std::function<double (double*, double*, uint32_t)>& f, double* const x, double* const g) const
 	{
+		return f(x, g, _n);
 	}
 
-	inline void _f_grad(const std::function<double (double*, int)>& f, double y, double* const x, double* const g) const
+	inline double _f_info(const std::function<DVal (DVal*, uint32_t)>& f, double* const x, double* const g) const
+	{
+		for (uint32_t i = 0; i < _n; ++i)
+			_dval[i].set(x[i], i);
+		DVal r = f(_dval, _n);
+		for (uint32_t i = 0; i < _n; ++i)
+			g[i] = r.d[i + 1];
+		return r.d[0];
+	}
+
+	inline void _f_grad(const std::function<double (double*, uint32_t)>& f, const double& y, double* const x, double* const g) const
 	{
 		if (_central_diff)
 		{
-			for (int i = 0; i < _n; ++i)
+			for (uint32_t i = 0; i < _n; ++i)
 			{
 				const double x_i = x[i];
 				x[i] = x_i + _eps;
@@ -294,7 +378,7 @@ private:
 		}
 		else
 		{
-			for (int i = 0; i < _n; ++i)
+			for (uint32_t i = 0; i < _n; ++i)
 			{
 				const double x_i = x[i];
 				x[i] = x_i + _eps;
@@ -303,6 +387,14 @@ private:
 				g[i] = (y_p - y) / _eps;
 			}
 		}
+	}
+
+	inline void _f_grad(const std::function<double (double*, double*, uint32_t)>& f, const double& y, double* const x, double* const g) const
+	{
+	}
+
+	inline void _f_grad(const std::function<DVal (DVal*, uint32_t)>& f, const double& y, double* const x, double* const g) const
+	{
 	}
 
 	// Line search.
@@ -360,7 +452,7 @@ private:
 		// gb = grad(f(b))^T * p
 		double gb;
 		//
-		int line_iter = 0;
+		uint32_t line_iter = 0;
 		for (; line_iter < _line_iter_max; ++line_iter)
 		{
 			_f_info(f, x, p, b, xi, fb, gb, g);
@@ -427,7 +519,8 @@ public:
 
 	~BFGS()
 	{
-		_free();
+		_free_ptr();
+		_free_dval();
 	}
 
 	// Stop criterion. Gradient Norm.
@@ -456,7 +549,7 @@ public:
 	}
 
 	// Stop criterion. The maximum number of iterations of the algorithm.
-	void set_max_iter(int max_iter)
+	void set_max_iter(uint32_t max_iter)
 	{
 		if (max_iter > 0)
 			_max_iter = max_iter;
@@ -476,7 +569,7 @@ public:
 
 	// The maximum number of iterations of the line search.
 	// Defaul: 100.
-	void set_line_max_iter(int line_max_iter)
+	void set_line_max_iter(uint32_t line_max_iter)
 	{
 		if (line_max_iter > 0)
 			_line_iter_max = line_max_iter;
@@ -536,8 +629,7 @@ public:
 		if (memory_save != _memory_save)
 		{
 			_memory_save = memory_save;
-			_n = 0;
-			_free();
+			_free_ptr();
 		}
 	}
 
@@ -548,18 +640,32 @@ public:
 		_use_strong_wolfe = use_strong_wolfe;
 	}
 
+	// Specifies the amount of memory for automatic derivative
+	// Defaul: 100.
+	void set_dval_size(uint32_t dval_size)
+	{
+		if (dval_size != _dval_size)
+		{
+			_dval_size = dval_size;
+			_free_dval();
+		}
+	}
+
 	// Search for the function minimum.
-	// f - minimized function of the form: double f(double* x, int n) or double f(double* x, double* g, int n).
+	// f - minimized function
+	//    numerical derivative: double f(double* x, uint32_t n)
+	//    analytic derivative:  double f(double* x, double* g, uint32_t n)
+	//    automatic derivative: DVal f(DVal* x, uint32_t n)
 	// x - initial point value and result.
 	// n - dimension.
 	template <typename fun>
-	double find_min(const fun& f, double* const x, const int n)
+	double find_min(const fun& f, double* const x, const uint32_t n)
 	{
 		//
 		if (n < 1 || x == nullptr)
 			return std::numeric_limits<double>::infinity();
 		//
-		_init(n);
+		_init(f, n);
 		// Step value.
 		double ai;
 		// Function value and derivatives (if the derivatives are analytical).
@@ -568,7 +674,7 @@ public:
 		double y = _f_info(f, x, _g);
 		// double y = f(x, _n);
 		// Limit the number of iterations.
-		int iter = 0;
+		uint32_t iter = 0;
 		for (; iter < _max_iter; ++iter)
 		{
 			// Stop check.
@@ -614,23 +720,23 @@ public:
 						// | - 1 5 8 |
 						// | - - 2 6 |
 						// | - - - 3 |
-						int k = 0;
+						uint32_t k = 0;
 						for (; k < _n; ++k)
 							_h[k] += _p[k] * (tmp * _p[k] - 2.0 * pdg * _xi[k]);
-						for (int i = 1; i < _n; ++i)
+						for (uint32_t i = 1; i < _n; ++i)
 						{
-							for (int j = i; j < _n; ++j, ++k)
+							for (uint32_t j = i; j < _n; ++j, ++k)
 								_h[k] += tmp * _p[j] * _p[j - i] - pdg * (_xi[j] * _p[j - i] + _p[j] * _xi[j - i]);
 						}
 					}
 					else
 					{
-						for (int i = 0, m = 0; i < _n; ++i)
+						for (uint32_t i = 0, m = 0; i < _n; ++i)
 						{
 							// h - symmetric matrix
-							for (int j = 0; j < i; ++j, ++m)
+							for (uint32_t j = 0; j < i; ++j, ++m)
 								_h[m] = _h[j * _n + i];
-							for (int j = i; j < _n; ++j, ++m)
+							for (uint32_t j = i; j < _n; ++j, ++m)
 								_h[m] += tmp * _p[i] * _p[j] - pdg * (_xi[i] * _p[j] + _p[i] * _xi[j]);
 						}
 					}
@@ -640,7 +746,7 @@ public:
 			// p = h * g
 			_mull_m_v(_h, _g, _p);
 			// p = -p
-			for (int i = 0; i < _n; ++i)
+			for (uint32_t i = 0; i < _n; ++i)
 				_p[i] = -_p[i];
 			// d = g^T * p (the derivative at the point a = 0.0).
 			const double d = _mull_v_v(_g, _p);
@@ -659,5 +765,20 @@ public:
 		}
 		// y = f(х)
 		return y;
+	}
+
+	double find_min_num(const std::function<double (double*, uint32_t)>& f, double* const x, const uint32_t n)
+	{
+		return find_min(f, x, n);
+	}
+
+	double find_min_grad(const std::function<double (double*, double*, uint32_t)>& f, double* const x, const uint32_t n)
+	{
+		return find_min(f, x, n);
+	}
+
+	double find_min_auto(const std::function<DVal (DVal*, uint32_t)>& f, double* const x, const uint32_t n)
+	{
+		return find_min(f, x, n);
 	}
 };

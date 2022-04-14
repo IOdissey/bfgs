@@ -14,7 +14,7 @@ This is a c++ implementation of the BFGS algorithm.
 
 Include header
 ```
-#include "bfgs.h"
+#include <bfgs/bfgs.h>
 ```
 
 Create and configure BFGS class

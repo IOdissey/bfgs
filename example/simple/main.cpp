@@ -1,7 +1,8 @@
 #include <iostream>
 #include <string>
+#include <chrono>
 
-#include "bfgs.h"
+#include <bfgs/bfgs.h>
 
 
 void print(const std::string& name, double y, const double* const x, int n, int fun_n)
@@ -21,16 +22,17 @@ int main()
 	bfgs.set_stop_grad_eps(1e-7);
 	bfgs.set_stop_step_eps(1e-7);
 	bfgs.set_max_iter(1000);
+	bfgs.set_dval_size(20);
 
 	// Numerical derivative.
 	{
-		int fun_n = 0;
-		auto f = [&fun_n](const double* const x, int n) -> double
+		uint32_t fun_n = 0;
+		auto f = [&fun_n](const double* const x, uint32_t n) -> double
 		{
 			++fun_n;
 			return x[0] * x[0] + x[1] * x[1] + x[0] + 2 * x[1];
 		};
-		const int n = 2;
+		const uint32_t n = 2;
 		double x[n] = {0.0, 0.0};
 		double y = bfgs.find_min(f, x, n);
 		print("x1^2 + x2^2 + x1 + 2 * x2 (numerical)", y, x, n, fun_n);
@@ -38,18 +40,32 @@ int main()
 
 	// Analytic derivative.
 	{
-		int fun_n = 0;
-		auto f = [&fun_n](const double* const x, double* const g, int n) -> double
+		uint32_t fun_n = 0;
+		auto f = [&fun_n](const double* const x, double* const g, uint32_t n) -> double
 		{
 			++fun_n;
 			g[0] = 2 * x[0] + 1;
 			g[1] = 2 * x[1] + 2;
 			return x[0] * x[0] + x[1] * x[1] + x[0] + 2 * x[1];
 		};
-		const int n = 2;
+		const uint32_t n = 2;
 		double x[n] = {0.0, 0.0};
 		double y = bfgs.find_min(f, x, n);
 		print("x1^2 + x2^2 + x1 + 2 * x2 (analytic)", y, x, n, fun_n);
+	}
+
+	// Automatic derivative.
+	{
+		uint32_t fun_n = 0;
+		auto f = [&fun_n](const DVal* const x, uint32_t n) -> DVal
+		{
+			++fun_n;
+			return x[0] * x[0] + x[1] * x[1] + x[0] + 2 * x[1];
+		};
+		const uint32_t n = 2;
+		double x[n] = {0.0, 0.0};
+		double y = bfgs.find_min(f, x, n);
+		print("x1^2 + x2^2 + x1 + 2 * x2 (automatic)", y, x, n, fun_n);
 	}
 
 	return 0;
