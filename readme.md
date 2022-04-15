@@ -94,106 +94,106 @@ auto f = [&fun_call](const bfgs::fix::DVal<2>* const x, uint32_t n) -> bfgs::fix
 };
 const int n = 2;
 double x[n] = {0.0, 0.0};
-double y = bfgs_var.find_min(f, x, n);
+double y = bfgs_fix.find_min(f, x, n);
 ```
 
 
 ## Example
 * [simple examples](example/simple)
 * [compare with dlib](example/dlib)
-* [demonstration of automatic differentiation](example/autodif)
+* [demonstration of automatic differentiation](example/autodiff)
 
 
-### Options
+## Options
 
-> `grad_eps`<br/>
+> **grad_eps**<br/>
 Epsilon for calculating gradients. It is also used for some other checks.<br/>
 Default: `1e-8`.
-```
-bfgs.set_grad_eps(1e-8);
-```
+> ```
+> bfgs.set_grad_eps(1e-8);
+> ```
 
-> `stop_grad_eps`<br/>
+> **stop_grad_eps**<br/>
 Stop criterion. Gradient Norm.<br/>
 Default: `1e-7`.
-```
-bfgs.set_stop_grad_eps(1e-7);
-```
+> ```
+> bfgs.set_stop_grad_eps(1e-7);
+> ```
 
-> `stop_step_eps`<br/>
+> **stop_step_eps**<br/>
 Stop criterion. The function change size between iterations.<br/>
 Default: `1e-7`.
-```
-bfgs.set_stop_step_eps(1e-7);
-```
+> ```
+> bfgs.set_stop_step_eps(1e-7);
+> ```
 
-> `max_iter`<br/>
+> **max_iter**<br/>
 Stop criterion. The maximum number of iterations of the algorithm.<br/>
 Default: `1000`.
-```
-bfgs.set_max_iter(1000);
-```
+> ```
+> bfgs.set_max_iter(1000);
+> ```
 
-> `c1 and c2`<br/>
+> **c1 and c2**<br/>
 Wolfe criterion constants (`0.0 < c1 < c2 < 1.0`).<br/>
 Default: `0.01` and `0.9`.
-```
-bfgs.set_c1_c2(0.01, 0.9);
-```
+> ```
+> bfgs.set_c1_c2(0.01, 0.9);
+> ```
 
-> `line_max_iter`<br/>
+> **line_max_iter**<br/>
 The maximum number of iterations of the line search.<br/>
 Default: `100`.
-```
-bfgs.set_line_max_iter(100);
-```
+> ```
+> bfgs.set_line_max_iter(100);
+> ```
 
-> `central_diff`<br/>
+> **central_diff**<br/>
 Only for version with dynamic dimension.<br/>>
 Use central difference or forward difference for the gradient.<br/>
 Default: `true`.
-```
-bfgs.set_central_diff(true);
-```
+> ```
+> bfgs.set_central_diff(true);
+> ```
 
-> `line_central_diff`<br/>
-Only for version with dynamic dimension.<br/>>
+> **line_central_diff**<br/>
+Only for version with dynamic dimension.<br/>
 Use central difference or forward difference for the line serach.<br/>
 Maybe we don't want too much precision here.<br/>
 You can try it to reduce the number of function calls (set to false).<br/>
 Default: `true`.
-```
-bfgs.set_line_central_diff(false);
-```
+> ```
+> bfgs.set_line_central_diff(false);
+> ```
 
-> `min_f`<br/>
+> **min_f**<br/>
 Estimated minimum of the function.<br/>
 Used for stop criterion if<br/>
 `fk - grad_eps < min_f`<br/>
 Also used for step_tweak option.<br/>
 Default: `inf` (not use).
-```
-bfgs.set_min_f(-1.0);
-```
+> ```
+> bfgs.set_min_f(-1.0);
+> ```
 
-> `step_tweak`<br/>
+> **step_tweak**<br/>
 Experimental setting of the first step of the linear search.<br/>
 If set, then the first step of the linear search will be:<br/>
 `a = min(1, step_tweak * (f_min - f) / drad(f))`<br/>
 Default: `0.0` (not use step_tweak if <= `0.0`)
-```
-bfgs.set_step_tweak(2.0);
-```
+> ```
+> bfgs.set_step_tweak(2.0);
+> ```
 
-> `reuse_hessian`<br/>
+> **reuse_hessian**<br/>
 Experimental setting.<br/>
 When solving a large number of similar problems, the value from the previous run can be used as the initial approximation of the inverse Hessian.<br/>
 Default: `false`.
-```
-bfgs.set_reuse_hessian(true);
-```
+> ```
+> bfgs.set_reuse_hessian(true);
+> ```
 
-> `memory_save`<br/>
+> **memory_save**<br/>
 Only for version with dynamic dimension.<br/>
 If we want to save some memory for a large problem.<br/>
 In the usual case, the memory size is proportional to:<br/>
@@ -202,23 +202,23 @@ In the case of storing only the upper triangular inverse Hessian matrix, the mem
 `n * (n + 9) / 2`<br/>
 Does not matter for the case of automatic differentiation<br/>
 Default: `false`.
-```
-bfgs.set_memory_save(true);
-```
+> ```
+> bfgs.set_memory_save(true);
+> ```
 
-> `strong_wolfe`<br/>
+> **strong_wolfe**<br/>
 Use the strong Wolfe conditions (`true`).<br/>
 Use the normal Wolfe condition (`false`).<br/>
 Defaul: `true`.
-```
-bfgs.set_strong_wolfe(true);
-```
+> ```
+> bfgs.set_strong_wolfe(true);
+> ```
 
-> `strong_wolfe`<br/>
-Only for version with dynamic dimension.<br/>>
+> **dval_size**<br/>
+Only for version with dynamic dimension.<br/>
 Specifies the amount of memory for automatic derivative.<br/>
 If set to `0` then memory is not reserved in advance (may be slower).<br/>
 Defaul: `100`.
-```
-bfgs.set_dval_size(100);
-```
+> ```
+> bfgs.set_dval_size(100);
+> ```
