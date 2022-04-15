@@ -3,7 +3,8 @@
 #include <chrono>
 #include <functional>
 
-#include <bfgs/dval.h>
+#include <bfgs/var/dval.h>
+#include <bfgs/fix/dval.h>
 
 
 template <typename T>
@@ -98,19 +99,39 @@ int main()
 	}
 	std::cout << std::endl;
 
-	// Automatic derivative.
-	std::cout << "Automatic derivative: " << std::endl;
+	// Automatic derivative (dinamic).
+	std::cout << "Automatic derivative (dinamic): " << std::endl;
 	for (int j = 0; j < 5; ++j)
 	{
 		const int n = 5;
-		Memory mem(n, 100);
-		DVal x_arr[n];
+		bfgs::var::Memory mem(n, 100);
+		bfgs::var::DVal x_arr[n];
 		for (int i = 0; i < n; ++i)
 			x_arr[i].set(1.0 + i, i, &mem);
-		auto f = fun<DVal>();
+		auto f = fun<bfgs::var::DVal>();
 
 		auto beg = std::chrono::steady_clock::now();
-		DVal res = f(x_arr, n);
+		auto res = f(x_arr, n);
+		auto end = std::chrono::steady_clock::now();
+		double dt = std::chrono::duration_cast<std::chrono::nanoseconds>(end - beg).count() * 1e-6;
+
+		std::cout << "dt = " << dt << " ms" << std::endl;
+		std::cout << res << std::endl;
+		std::cout << std::endl;
+	}
+
+	// Automatic derivative (static).
+	std::cout << "Automatic derivative (static): " << std::endl;
+	for (int j = 0; j < 5; ++j)
+	{
+		const int n = 5;
+		bfgs::fix::DVal<n> x_arr[n];
+		for (int i = 0; i < n; ++i)
+			x_arr[i].set(1.0 + i, i);
+		auto f = fun<bfgs::fix::DVal<n>>();
+
+		auto beg = std::chrono::steady_clock::now();
+		auto res = f(x_arr, n);
 		auto end = std::chrono::steady_clock::now();
 		double dt = std::chrono::duration_cast<std::chrono::nanoseconds>(end - beg).count() * 1e-6;
 

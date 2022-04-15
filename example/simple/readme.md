@@ -1,6 +1,6 @@
 ### Example
 
-The simple example. Demonstrates the use of analytic and numerical derivatives.
+The simple example. Demonstrates the use of analytic, numerical and automatic derivatives.
 
 ### Build
 ```
