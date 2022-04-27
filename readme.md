@@ -62,7 +62,7 @@ auto f = [](const DVal<2>* const x, uint32_t n) -> DVal<2>
 };
 const int n = 2;
 double x[n] = {0.0, 0.0};
-double y = bfgs_var.find_min_auto<2>(f, x, n);
+double y = bfgs.find_min_auto<2>(f, x, n);
 ```
 
 You can use automatic derivatives with dynamic dimension.
@@ -73,7 +73,7 @@ auto f = [](const DVal<0>* const x, uint32_t n) -> DVal<0>
 };
 const int n = 2;
 double x[n] = {0.0, 0.0};
-double y = bfgs_var.find_min_auto(f, x, n);
+double y = bfgs.find_min_auto(f, x, n);
 ```
 
 
