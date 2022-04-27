@@ -1,7 +1,7 @@
 #include <dlib/optimization.h>
 
-#include <bfgs/var/bfgs.h>
-#include <bfgs/fix/bfgs.h>
+#include <bfgs/bfgs.h>
+#include <bfgs/dval.h>
 
 
 int _fun_call = 0;
@@ -38,13 +38,13 @@ public:
 		return _f(x[0], x[1]);
 	}
 
-	bfgs::var::DVal operator()(const bfgs::var::DVal* const x, uint32_t n) const
+	DVal<0> operator()(const DVal<0>* const x, uint32_t n) const
 	{
 		return _f(x[0], x[1]);
 	}
 
 	template <uint32_t N>
-	bfgs::fix::DVal<N> operator()(const bfgs::fix::DVal<N>* const x, uint32_t n) const
+	DVal<N> operator()(const DVal<N>* const x, uint32_t n) const
 	{
 		return _f(x[0], x[1]);
 	}
@@ -80,13 +80,13 @@ public:
 		return _f(x[0], x[1]);
 	}
 
-	bfgs::var::DVal operator()(const bfgs::var::DVal* const x, uint32_t n) const
+	DVal<0> operator()(const DVal<0>* const x, uint32_t n) const
 	{
 		return _f(x[0], x[1]);
 	}
 
 	template <uint32_t N>
-	bfgs::fix::DVal<N> operator()(const bfgs::fix::DVal<N>* const x, uint32_t n) const
+	DVal<N> operator()(const DVal<N>* const x, uint32_t n) const
 	{
 		return _f(x[0], x[1]);
 	}
@@ -124,17 +124,17 @@ void test(const fun& f)
 		std::cout << "fun_call: " << _fun_call << "\ndt (us): " << 1e6 * dt / iter << "\nsolution: " << dlib_y  << std::endl <<  dlib_point;
 	}
 
+	BFGS bfgs;
+	bfgs.set_grad_eps(1e-8);
+	bfgs.set_stop_grad_eps(1e-7);
+	bfgs.set_stop_step_eps(1e-7);
+	bfgs.set_max_iter(1000);
+	bfgs.set_line_central_diff(false);
+
 	{
 		const uint32_t n = 2;
-		bfgs::var::BFGS bfgs_var;
-		bfgs_var.set_grad_eps(1e-8);
-		bfgs_var.set_stop_grad_eps(1e-7);
-		bfgs_var.set_stop_step_eps(1e-7);
-		bfgs_var.set_max_iter(1000);
-		bfgs_var.set_line_central_diff(false);
-
 		double bfgs_point[n] = {-1.0, -1.0};
-		double bfgs_y;
+		double bfgs_y = bfgs.find_min_num(f, bfgs_point, n);
 
 		auto beg = std::chrono::steady_clock::now();
 		for (int i = 0; i < iter; ++i)
@@ -142,7 +142,7 @@ void test(const fun& f)
 			_fun_call = 0;
 			bfgs_point[0] = -1.0;
 			bfgs_point[1] = -1.0;
-			bfgs_y = bfgs_var.find_min_num(f, bfgs_point, n);
+			bfgs_y = bfgs.find_min_num(f, bfgs_point, n);
 		}
 		auto end = std::chrono::steady_clock::now();
 		double dt = std::chrono::duration_cast<std::chrono::nanoseconds>(end - beg).count() * 1e-9;
@@ -155,14 +155,8 @@ void test(const fun& f)
 
 	{
 		const uint32_t n = 2;
-		bfgs::var::BFGS bfgs_var;
-		bfgs_var.set_stop_grad_eps(1e-7);
-		bfgs_var.set_stop_step_eps(1e-7);
-		bfgs_var.set_max_iter(1000);
-		bfgs_var.set_dval_size(100);
-
 		double bfgs_point[n] = {-1.0, -1.0};
-		double bfgs_y;
+		double bfgs_y = bfgs.find_min_auto(f, bfgs_point, n);
 
 		auto beg = std::chrono::steady_clock::now();
 		for (int i = 0; i < iter; ++i)
@@ -170,12 +164,12 @@ void test(const fun& f)
 			_fun_call = 0;
 			bfgs_point[0] = -1.0;
 			bfgs_point[1] = -1.0;
-			bfgs_y = bfgs_var.find_min_auto(f, bfgs_point, n);
+			bfgs_y = bfgs.find_min_auto(f, bfgs_point, n);
 		}
 		auto end = std::chrono::steady_clock::now();
 		double dt = std::chrono::duration_cast<std::chrono::nanoseconds>(end - beg).count() * 1e-9;
 
-		std::cout << "\tbfgs auto" << std::endl;
+		std::cout << "\tbfgs auto dynamic" << std::endl;
 		std::cout << "fun_call: " << _fun_call << "\ndt (us): " << 1e6 * dt / iter << "\nsolution: " << bfgs_y << std::endl;
 		for (int i = 0; i < n; ++i)
 			std::cout << bfgs_point[i] << std::endl;
@@ -183,13 +177,8 @@ void test(const fun& f)
 
 	{
 		const uint32_t n = 2;
-		bfgs::fix::BFGS<n> bfgs_fix;
-		bfgs_fix.set_stop_grad_eps(1e-7);
-		bfgs_fix.set_stop_step_eps(1e-7);
-		bfgs_fix.set_max_iter(1000);
-
 		double bfgs_point[n] = {-1.0, -1.0};
-		double bfgs_y;
+		double bfgs_y = bfgs.find_min_auto<2>(f, bfgs_point, n);
 
 		auto beg = std::chrono::steady_clock::now();
 		for (int i = 0; i < iter; ++i)
@@ -197,12 +186,12 @@ void test(const fun& f)
 			_fun_call = 0;
 			bfgs_point[0] = -1.0;
 			bfgs_point[1] = -1.0;
-			bfgs_y = bfgs_fix.find_min(f, bfgs_point, n);
+			bfgs_y = bfgs.find_min_auto<2>(f, bfgs_point, n);
 		}
 		auto end = std::chrono::steady_clock::now();
 		double dt = std::chrono::duration_cast<std::chrono::nanoseconds>(end - beg).count() * 1e-9;
 
-		std::cout << "\tbfgs auto static" << std::endl;
+		std::cout << "\tbfgs auto fixed" << std::endl;
 		std::cout << "fun_call: " << _fun_call << "\ndt (us): " << 1e6 * dt / iter << "\nsolution: " << bfgs_y << std::endl;
 		for (int i = 0; i < n; ++i)
 			std::cout << bfgs_point[i] << std::endl;
