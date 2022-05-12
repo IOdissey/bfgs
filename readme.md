@@ -199,3 +199,11 @@ Defaul: `100`.
 > ```
 > bfgs.set_dval_size(100);
 > ```
+
+> **line_force_num**<br/>
+Force use of numerical derivative in linear search for the case of an analytic derivative.<br/>
+In the case when the gradient is not needed when calling the function, the gradient pointer will be `nullptr`.<br/>
+Defaul: `false`.
+> ```
+> bfgs.set_line_force_num(true);
+> ```
