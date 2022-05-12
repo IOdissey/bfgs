@@ -730,6 +730,7 @@ public:
 	{
 		if (n != N)
 			return std::numeric_limits<double>::infinity();
+		_line_force_num = false;
 		DVal<N> dval[n];
 		for (uint32_t i = 0; i < n; ++i)
 			dval[i].set(x[i], i);
@@ -750,6 +751,7 @@ public:
 	{
 		if (n == 0)
 			return std::numeric_limits<double>::infinity();
+		_line_force_num = false;
 		Memory mem(n, _dval_size);
 		auto g = [&mem, &f](const double* const x, double* const g, uint32_t n) -> double
 		{
