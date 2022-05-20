@@ -21,7 +21,7 @@ private:
 	double* _g = nullptr;           // The gradient value.
 	double* _dg = nullptr;          // The gradient increment.
 	double* _p = nullptr;           // Search direction.
-	double* _xi = nullptr;          // New point.
+	double* _tv = nullptr;          // Temporary vector.
 	double* _h = nullptr;           // Approximation of the inverse Hessian.
 
 	double _min_f = std::numeric_limits<double>::infinity();
@@ -41,6 +41,12 @@ private:
 	bool _use_strong_wolfe = true;  // Use Strong Wolfe conditions.
 	uint32_t _dval_size = 100;      // Specifies the amount of memory for automatic derivative with dynamic dimension.
 	bool _line_force_num = false;   // Force use of numerical derivative in linear search for the case of an analytic derivative.
+
+	uint32_t _lbfgs_m = 0;
+	uint32_t _lbfgs_i = 0;
+	double* _dgi = nullptr;
+	double* _si = nullptr;
+	double* _ai = nullptr;
 	
 	// Diagonal matrix.
 	void _diag(double* m, const double val = 1.0) const
@@ -106,14 +112,21 @@ private:
 	}
 
 	// r = v1 + a * v2.
-	void _add_v_av(const double* v1, const double* v2, const double a, double* r) const
+	inline void _add_v_av(const double* v1, const double* v2, const double& a, double* r) const
 	{
 		for (uint32_t i = 0; i < _n; ++i)
 			r[i] = v1[i] + a * v2[i];
 	}
 
+	// v1 = v1 + a * v2
+	inline void _add_v_av(double* v1, const double* v2, const double& a) const
+	{
+		for (uint32_t i = 0; i < _n; ++i)
+			v1[i] += a * v2[i];
+	}
+
 	// r = v1^T * v2.
-	double _mull_v_v(const double* v1, const double* v2) const
+	inline double _mull_v_v(const double* v1, const double* v2) const
 	{
 		double r = 0.0;
 		for (uint32_t i = 0; i < _n; ++i)
@@ -142,6 +155,22 @@ private:
 			r[i] = v1[i] - v2[i];
 	}
 
+	// v = v * a
+	inline void _mull_v_a(double* const v, const double& a) const
+	{
+		for (uint32_t i = 0; i < _n; ++i)
+			v[i] *= a;
+	}
+
+	//
+	inline uint32_t _lbfgs_get_idx(uint32_t& i) const
+	{
+		if (_lbfgs_i < i)
+			return (_lbfgs_m + _lbfgs_i) - i;
+		else
+			return _lbfgs_i - i;
+	}
+
 	// Memory free.
 	void _free_ptr()
 	{
@@ -159,19 +188,32 @@ private:
 		{
 			_free_ptr();
 			_n = n;
-			if (_memory_save)
-				// n * (n + 9) / 2 = 4 * n + n * (n + 1) / 2
+			if (_lbfgs_m > 0)
+				// 4 * n + 2 * m * n + 2 * m = n * (4 + 2 * m) + 2 * m
+				_ptr = new double[_n * (4 + 2 * _lbfgs_m) + 2 * _lbfgs_m];
+			else if (_memory_save)
+				// 4 * n + n * (n + 1) / 2 = n * (n + 9) / 2
 				_ptr = new double[_n * (_n + 9) / 2];
 			else
-				// n * (n + 4) = 4 * n + n * n
+				// 4 * n + n * n = n * (n + 4)
 				_ptr = new double[_n * (_n + 4)];
-			_g = _ptr;
+			_tv = _ptr;
+			_p = _tv + _n;
+			_g = _p + _n;
 			_dg = _g + _n;
-			_p = _dg + _n;
-			_xi = _p + _n;
-			_h = _xi + _n;
-			_diag(_h);
+			_h = _dg + _n;
+			if (_lbfgs_m > 0)
+			{
+				_ai = _h + _lbfgs_m;
+				_dgi = _ai + _lbfgs_m;
+				_si = _dgi + _lbfgs_m * _n;
+				_lbfgs_i = 0;
+			}
+			else
+				_diag(_h);
 		}
+		else if (_lbfgs_m > 0)
+			_lbfgs_i = 0;
 		else if (!_reuse_hessian)
 			_diag(_h);
 	}
@@ -309,13 +351,13 @@ private:
 
 	inline double _f_info(const std::function<double (double*, uint32_t)>& f, double* const x, double* const g) const
 	{
-		return f(x, _n);
+		double y = f(x, _n);
+		_f_grad(f, y, x, _g);
+		return y;
 	}
 
 	inline double _f_info(const std::function<double (double*, double*, uint32_t)>& f, double* const x, double* const g) const
 	{
-		if (_line_force_num)
-			return f(x, nullptr, _n);
 		return f(x, g, _n);
 	}
 
@@ -625,14 +667,85 @@ public:
 		_init_ptr(n);
 		// Step value.
 		double ai;
-		// Function value and derivatives (if the derivatives are analytical).
+		// Function value and derivatives.
 		// y = f(x)
 		// g = grad(f(x))
 		double y = _f_info(f, x, _g);
 		// Limit the number of iterations.
-		uint32_t iter = 0;
-		for (; iter < _max_iter; ++iter)
+		for (uint32_t iter = 0; iter < _max_iter; ++iter)
 		{
+			// Search direction.
+			if (_lbfgs_m > 0)
+			{
+				// p = g
+				_copy_v(_g, _p);
+				if (iter > 0)
+				{
+					double* dgi = _dgi + _lbfgs_i * _n;
+					// gamma = s^T * dg / (dg^T * dg)
+					// h = 1.0 / (s^T * dg)
+					// gamma = 1 / (h * dg^T * dg)
+					double gamma = 1.0 / (_h[_lbfgs_i] * _mull_v_v(dgi, dgi));
+					// 
+					const uint32_t m = std::min(iter, _lbfgs_m);
+					for (uint32_t i = 0; i < m; ++i)
+					{
+						const uint32_t idx = _lbfgs_get_idx(i);
+						double* si = _si + idx * _n;
+						double* dgi = _dgi + idx * _n;
+						// ai = hi * si^T * p
+						_ai[i] = _h[idx] * _mull_v_v(si, _p);
+						// p = p - ai * dgi
+						_add_v_av(_p, dgi, -ai);
+					}
+					// p = gamma * p
+					_mull_v_a(_p, gamma);
+					//
+					for (uint32_t i = m - 1; i >= 0; --i)
+					{
+						const uint32_t idx = _lbfgs_get_idx(i);
+						double* si = _si + idx * _n;
+						double* dgi = _dgi + idx * _n;
+						// b = hi * dgi^T * p
+						const double b = _h[idx] * _mull_v_v(dgi, _p);
+						// p = p + si * (ai - b)
+						_add_v_av(_p, si, _ai[i] - b);
+					}
+					++_lbfgs_i;
+					if (_lbfgs_i >= _lbfgs_m)
+						_lbfgs_i = 0;
+				}
+			}
+			else
+			{
+				// p = h * g
+				_mull_m_v(_h, _g, _p);
+			}
+			// p = -p
+			for (uint32_t i = 0; i < _n; ++i)
+				_p[i] = -_p[i];
+			// d = g^T * p (the derivative at the point a = 0.0).
+			const double d = _mull_v_v(_g, _p);
+			// TODO. _stop_grad_eps
+			if (std::abs(d) < std::abs(y) * std::numeric_limits<double>::epsilon())
+				break;
+			// dg = g
+			_swap_p(_g, _dg);
+			// Line search.
+			// If the derivatives are analytical, then its value will be stored in _g.
+			double dy = _line_search(f, x, _p, y, d, _tv, y, ai, _g);
+			// 
+			if (_lbfgs_m > 0)
+			{
+				double* si = _si + _lbfgs_i * _n;
+				// si = tv - x
+				_sub_v_v(_tv, x, si);
+			}
+			// x = _tv
+			_copy_v(_tv, x);
+			// Stop check.
+			if (std::abs(dy) < _stop_step_eps)
+				break;
 			// Stop check.
 			if (std::isfinite(_min_f) && y - _eps < _min_f)
 				break;
@@ -646,78 +759,67 @@ public:
 			// Stop check.
 			if (g_norm < _stop_grad_eps)
 				break;
-			// Update the inverse hessian if it's not the first iteration.
-			if (iter > 0)
+			//
+			if (_lbfgs_m > 0)
 			{
-				// The gradient increment.
-				// dg = g - dg.
-				_sub_v_v(_g, _dg, _dg);
-				// p_dg = p^T * dg
-				const double p_dg = _mull_v_v(_p, _dg);
-				if (p_dg > _eps)
+				double* si = _si + _lbfgs_i * _n;
+				double* dgi = _dgi + _lbfgs_i * _n;
+				// dgi = g - dg
+				_sub_v_v(_g, _dg, dgi);
+				// s_dg = s^T * dg
+				const double s_dg = _mull_v_v(si, dgi);
+				if (s_dg > _eps)
+					_h[_lbfgs_i] = 1.0 / s_dg;
+				continue;
+			}
+			// Update the inverse hessian.
+			// The gradient increment.
+			// dg = g - dg.
+			_sub_v_v(_g, _dg, _dg);
+			// p_dg = p^T * dg
+			const double p_dg = _mull_v_v(_p, _dg);
+			if (p_dg < _eps)
+				continue;
+			// Inverse Hessian update.
+			// h = h + (s^T * dg + dg^T * h * dg) * (s * s^T) / (s^T * dg)^2 - (h * dg * s^T + s * dg^T * h) / (s^T * dg)
+			// s = a * p
+			// h = h + (a * p^T * dg + dg^T * h * dg) * (p * p^T) / (p^T * dg)^2 - (h * dg * p^T + p * dg^T * h) / (p^T * dg)
+			// pdg = 1 / (p^T * dg)
+			const double pdg = 1.0 / p_dg;
+			// tv = hdg = h * dg = dg^T * h (h - symmetric matrix)
+			_mull_m_v(_h, _dg, _tv);
+			// The expression now looks like:
+			// h = h + (a * pdg + pdg^2 * dg^T * hdg) * (p * p^T) - pdg * (hdg * p^T + p * hdg^T)
+			// tmp = a * pdg + pdg^2 * dg^T * hdg
+			const double tmp = pdg * (ai + pdg * _mull_v_v(_dg, _tv));
+			// h = h + tmp * (p * p^T) - pdg * (hdg * p^T + p * hdg^T)
+			if (_memory_save)
+			{
+				// h - symmetric matrix
+				// | 0 4 7 9 |
+				// | - 1 5 8 |
+				// | - - 2 6 |
+				// | - - - 3 |
+				uint32_t k = 0;
+				for (; k < _n; ++k)
+					_h[k] += _p[k] * (tmp * _p[k] - 2.0 * pdg * _tv[k]);
+				for (uint32_t i = 1; i < _n; ++i)
 				{
-					// Inverse Hessian update.
-					// h = h + (s^T * dg + dg^T * h * dg) * (s * s^T) / (s^T * dg)^2 - (h * dg * s^T + s * dg^T * h) / (s^T * dg)
-					// s = a * p
-					// h = h + (a * p^T * dg + dg^T * h * dg) * (p * p^T) / (p^T * dg)^2 - (h * dg * p^T + p * dg^T * h) / (p^T * dg)
-					// pdg = 1 / (p^T * dg)
-					const double pdg = 1.0 / p_dg;
-					// xi = hdg = h * dg = dg^T * h (h - symmetric matrix)
-					_mull_m_v(_h, _dg, _xi);
-					// The expression now looks like:
-					// h = h + (a * pdg + pdg^2 * dg^T * hdg) * (p * p^T) - pdg * (hdg * p^T + p * hdg^T)
-					// tmp = a * pdg + pdg^2 * dg^T * hdg
-					const double tmp = pdg * (ai + pdg * _mull_v_v(_dg, _xi));
-					// h = h + tmp * (p * p^T) - pdg * (hdg * p^T + p * hdg^T)
-					if (_memory_save)
-					{
-						// h - symmetric matrix
-						// | 0 4 7 9 |
-						// | - 1 5 8 |
-						// | - - 2 6 |
-						// | - - - 3 |
-						uint32_t k = 0;
-						for (; k < _n; ++k)
-							_h[k] += _p[k] * (tmp * _p[k] - 2.0 * pdg * _xi[k]);
-						for (uint32_t i = 1; i < _n; ++i)
-						{
-							for (uint32_t j = i; j < _n; ++j, ++k)
-								_h[k] += tmp * _p[j] * _p[j - i] - pdg * (_xi[j] * _p[j - i] + _p[j] * _xi[j - i]);
-						}
-					}
-					else
-					{
-						for (uint32_t i = 0, m = 0; i < _n; ++i)
-						{
-							// h - symmetric matrix
-							for (uint32_t j = 0; j < i; ++j, ++m)
-								_h[m] = _h[j * _n + i];
-							for (uint32_t j = i; j < _n; ++j, ++m)
-								_h[m] += tmp * _p[i] * _p[j] - pdg * (_xi[i] * _p[j] + _p[i] * _xi[j]);
-						}
-					}
+					for (uint32_t j = i; j < _n; ++j, ++k)
+						_h[k] += tmp * _p[j] * _p[j - i] - pdg * (_tv[j] * _p[j - i] + _p[j] * _tv[j - i]);
 				}
 			}
-			// Search direction.
-			// p = h * g
-			_mull_m_v(_h, _g, _p);
-			// p = -p
-			for (uint32_t i = 0; i < _n; ++i)
-				_p[i] = -_p[i];
-			// d = g^T * p (the derivative at the point a = 0.0).
-			const double d = _mull_v_v(_g, _p);
-			if (std::abs(d) < std::abs(y) * std::numeric_limits<double>::epsilon())
-				break;
-			// dg = g
-			_swap_p(_g, _dg);
-			// Line search.
-			// If the derivatives are analytical, then its value will be stored in _g.
-			double dy = _line_search(f, x, _p, y, d, _xi, y, ai, _g);
-			// x = xi
-			_copy_v(_xi, x);
-			// Stop check.
-			if (std::abs(dy) < _stop_step_eps)
-				break;
+			else
+			{
+				for (uint32_t i = 0, m = 0; i < _n; ++i)
+				{
+					// h - symmetric matrix
+					for (uint32_t j = 0; j < i; ++j, ++m)
+						_h[m] = _h[j * _n + i];
+					for (uint32_t j = i; j < _n; ++j, ++m)
+						_h[m] += tmp * _p[i] * _p[j] - pdg * (_tv[i] * _p[j] + _p[i] * _tv[j]);
+				}
+			}
 		}
 		// y = f(х)
 		return y;
