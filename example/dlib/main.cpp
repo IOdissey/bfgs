@@ -96,6 +96,7 @@ template <typename fun>
 void test(const fun& f)
 {
 	const int iter = 1000;
+	// const int iter = 1;
 
 	{
 		dlib::matrix<double,0,1> dlib_point = {-1.0, -1.0};
@@ -132,6 +133,7 @@ void test(const fun& f)
 	bfgs.set_line_central_diff(false);
 
 	{
+		bfgs.set_lbfgs_m(0);
 		const uint32_t n = 2;
 		double bfgs_point[n] = {-1.0, -1.0};
 		double bfgs_y = bfgs.find_min_num(f, bfgs_point, n);
@@ -154,6 +156,30 @@ void test(const fun& f)
 	}
 
 	{
+		bfgs.set_lbfgs_m(5);
+		const uint32_t n = 2;
+		double bfgs_point[n] = {-1.0, -1.0};
+		double bfgs_y = bfgs.find_min_num(f, bfgs_point, n);
+
+		auto beg = std::chrono::steady_clock::now();
+		for (int i = 0; i < iter; ++i)
+		{
+			_fun_call = 0;
+			bfgs_point[0] = -1.0;
+			bfgs_point[1] = -1.0;
+			bfgs_y = bfgs.find_min_num(f, bfgs_point, n);
+		}
+		auto end = std::chrono::steady_clock::now();
+		double dt = std::chrono::duration_cast<std::chrono::nanoseconds>(end - beg).count() * 1e-9;
+
+		std::cout << "\tlbfgs num" << std::endl;
+		std::cout << "fun_call: " << _fun_call << "\ndt (us): " << 1e6 * dt / iter << "\nsolution: " << bfgs_y << std::endl;
+		for (int i = 0; i < n; ++i)
+			std::cout << bfgs_point[i] << std::endl;
+	}
+
+	{
+		bfgs.set_lbfgs_m(0);
 		const uint32_t n = 2;
 		double bfgs_point[n] = {-1.0, -1.0};
 		double bfgs_y = bfgs.find_min_auto(f, bfgs_point, n);
@@ -176,6 +202,7 @@ void test(const fun& f)
 	}
 
 	{
+		bfgs.set_lbfgs_m(0);
 		const uint32_t n = 2;
 		double bfgs_point[n] = {-1.0, -1.0};
 		double bfgs_y = bfgs.find_min_auto<2>(f, bfgs_point, n);

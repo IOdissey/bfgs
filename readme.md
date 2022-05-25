@@ -9,6 +9,8 @@ This is a c++ implementation of the BFGS algorithm.
 * header only
 * no dependencies
 * automatic derivative possible
+* lbfgs version possible
+
 
 ### Note
 The automatic derivative is an experimental option. Often this does not give advantages over numerical derivatives.
@@ -206,4 +208,12 @@ In the case when the gradient is not needed when calling the function, the gradi
 Defaul: `false`.
 > ```
 > bfgs.set_line_force_num(true);
+> ```
+
+> **line_force_num**<br/>
+History size for lbfgs version. If `0` then the regular version is used.<br/>
+The memory size is proportional to `2 * (n * m + n + m)`.<br/>
+Defaul: `0`.
+> ```
+> bfgs.set_lbfgs_m(0);
 > ```
