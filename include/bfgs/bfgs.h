@@ -19,10 +19,12 @@ private:
 	uint32_t _n = 0;                // Problem dimension.
 	double* _ptr = nullptr;         // Memory for all value.
 	double* _g = nullptr;           // The gradient value.
-	double* _dg = nullptr;          // The gradient increment.
 	double* _p = nullptr;           // Search direction.
-	double* _tv = nullptr;          // Temporary vector.
-	double* _h = nullptr;           // Approximation of the inverse Hessian.
+	double* _d = nullptr;           // The gradient increment.
+	double* _s = nullptr;           // Step.
+	double* _h = nullptr;           // Approximation of the inverse Hessian or temporary array for lbfgs version.
+	double* _ai = nullptr;          // Temporary array for lbfgs version.
+	uint32_t _lbfgs_i = 0;          // History index for lbfgs version.
 
 	double _min_f = std::numeric_limits<double>::infinity();
 	double _stop_grad_eps = 1e-7;   // Stop criteria.
@@ -41,12 +43,7 @@ private:
 	bool _use_strong_wolfe = true;  // Use Strong Wolfe conditions.
 	uint32_t _dval_size = 100;      // Specifies the amount of memory for automatic derivative with dynamic dimension.
 	bool _line_force_num = false;   // Force use of numerical derivative in linear search for the case of an analytic derivative.
-
-	uint32_t _lbfgs_m = 0;
-	uint32_t _lbfgs_i = 0;
-	double* _dgi = nullptr;
-	double* _si = nullptr;
-	double* _ai = nullptr;
+	uint32_t _lbfgs_m = 0;          // History size for lbfgs version. If 0 then the regular version is used.
 	
 	// Diagonal matrix.
 	void _diag(double* m, const double val = 1.0) const
@@ -199,19 +196,18 @@ private:
 				_ptr = new double[_n * (_n + 4)];
 			_g = _ptr;
 			_p = _g + _n;
+			_d = _p + _n;
 			if (_lbfgs_m > 0)
 			{
-				_h = _p + _n;
+				_s = _d + _lbfgs_m * _n;
+				_h = _s + _lbfgs_m * _n;
 				_ai = _h + _lbfgs_m;
-				_dgi = _ai + _lbfgs_m;
-				_si = _dgi + _lbfgs_m * _n;
 				_lbfgs_i = 0;
 			}
 			else
 			{
-				_dg = _p + _n;
-				_tv = _dg + _n;
-				_h = _tv + _n;
+				_s = _d + _n;
+				_h = _s + _n;
 				_diag(_h);
 			}
 		}
@@ -697,10 +693,10 @@ public:
 				if (d > -_eps)
 					break;
 				//
-				double* si = _si + _lbfgs_i * _n;
-				double* dgi = _dgi + _lbfgs_i * _n;
-				// dgi = g
-				_copy_v(_g, dgi);
+				double* si = _s + _lbfgs_i * _n;
+				double* di = _d + _lbfgs_i * _n;
+				// di = g
+				_copy_v(_g, di);
 				// si = x
 				_copy_v(x, si);
 				// Line search.
@@ -723,31 +719,32 @@ public:
 					break;
 				// si = x - si
 				_sub_v_v(x, si, si);
-				// dgi = g - dgi
-				_sub_v_v(_g, dgi, dgi);
-				// s_dg = s^T * dg
-				const double s_dg = _mull_v_v(si, dgi);
+				// di = g - di
+				_sub_v_v(_g, di, di);
+				// sd = s^T * d
+				const double sd = _mull_v_v(si, di);
 				// TODO. break?
-				if (std::abs(s_dg) < _eps)
+				if (std::abs(sd) < _eps)
 					break;
-				_h[_lbfgs_i] = 1.0 / s_dg;
+				_h[_lbfgs_i] = 1.0 / sd;
 				// Step update.
-				// gamma = s^T * dg / (dg^T * dg)
-				double gamma = s_dg / _mull_v_v(dgi, dgi);
+				// gamma = (s^T * d) / (d^T * d)
+				double gamma = sd / _mull_v_v(di, di);
 				// double gamma = 1.0;
 				// p = g
+				// _swap_p(_g, _p);
 				_copy_v(_g, _p);
 				//
 				const uint32_t m = std::min(iter + 1, _lbfgs_m);
 				for (uint32_t i = 0; i < m; ++i)
 				{
 					const uint32_t idx = _lbfgs_get_idx(i);
-					si = _si + idx * _n;
-					dgi = _dgi + idx * _n;
+					si = _s + idx * _n;
+					di = _d + idx * _n;
 					// ai = hi * si^T * p
 					_ai[i] = _h[idx] * _mull_v_v(si, _p);
-					// p = p - ai * dgi
-					_add_v_av(_p, dgi, -_ai[i]);
+					// p = p - ai * di
+					_add_v_av(_p, di, -_ai[i]);
 				}
 				// p = gamma * p
 				_mull_v_a(_p, gamma);
@@ -755,10 +752,10 @@ public:
 				for (uint32_t i = m; i > 0; --i)
 				{
 					const uint32_t idx = _lbfgs_get_idx(i - 1);
-					si = _si + idx * _n;
-					dgi = _dgi + idx * _n;
-					// b = hi * dgi^T * p
-					const double b = _h[idx] * _mull_v_v(dgi, _p);
+					si = _s + idx * _n;
+					di = _d + idx * _n;
+					// b = hi * di^T * p
+					const double b = _h[idx] * _mull_v_v(di, _p);
 					// p = p + si * (ai - b)
 					_add_v_av(_p, si, _ai[i - 1] - b);
 				}
@@ -781,13 +778,14 @@ public:
 				const double d = _mull_v_v(_g, _p);
 				if (d > -_eps)
 					break;
-				// dg = g
-				_swap_p(_g, _dg);
-				// _tv = x
-				_copy_v(x, _tv);
+				// d = g
+				// _swap_p(_g, _d);
+				_copy_p(_g, _d);
+				// s = x
+				_copy_v(x, _s);
 				// Line search.
 				// If the derivatives are analytical, then its value will be stored in _g.
-				double dy = _line_search(f, _tv, _p, y, d, x, y, _g);
+				double dy = _line_search(f, _s, _p, y, d, x, y, _g);
 				// Stop check.
 				if (std::abs(dy) < _stop_step_eps)
 					break;
@@ -804,29 +802,29 @@ public:
 				if (_norm(_g) < _stop_grad_eps)
 					break;
 				// Update the inverse hessian.
-				// h = h + (s^T * dg + dg^T * h * dg) * (s * s^T) / (s^T * dg)^2 - (h * dg * s^T + s * dg^T * h) / (s^T * dg)
-				// sdg = 1 / (s^T * dg) (scalar)
-				// hdg = h * dg (vector)
-				// h = h + sdg * (1 + dg^T * hdg * sdg) * (s * s^T) - (hdg * s^T + s * hdg^T) * sdg
-				// hdg_sdg = hdg * sdg (vector)
-				// h = h + sdg * (1 + dg^T * hdg_sdg) * (s * s^T) - hdg_sdg * s^T - s * hdg_sdg^T
+				// h = h + (s^T * d + d^T * h * d) * (s * s^T) / (s^T * d)^2 - (h * d * s^T + s * d^T * h) / (s^T * d)
+				// sd = 1 / (s^T * d) (scalar)
+				// hd = h * d (vector)
+				// h = h + sd * (1 + d^T * hd * sd) * (s * s^T) - (hd * s^T + s * hd^T) * sd
+				// hd_sd = hd * sd (vector)
+				// h = h + sd * (1 + d^T * hd_sd) * (s * s^T) - hd_sd * s^T - s * hd_sd^T
 				// The gradient increment.
-				// dg = g - dg.
-				_sub_v_v(_g, _dg, _dg);
-				// s = tv = x - tv
-				_sub_v_v(x, _tv, _tv);
-				// s_dg = s^T * dg
-				const double s_dg = _mull_v_v(_tv, _dg);
-				if (s_dg < _eps)
+				// d = g - d.
+				_sub_v_v(_g, _d, _d);
+				// s = x - tv
+				_sub_v_v(x, _s, _s);
+				// sd = s^T * d
+				const double s_d = _mull_v_v(_s, _d);
+				if (s_d < _eps)
 					continue;
-				const double sdg = 1.0 / s_dg;
-				// p = hdg = h * dg = dg^T * h (h - symmetric matrix)
-				_mull_m_v(_h, _dg, _p);
-				// p = hdg_sdg = hdg * sdg
-				_mull_v_a(_p, sdg);
-				// tmp = sdg * (1 + dg^T * hdg_sdg)
-				const double tmp = sdg * (1.0 + _mull_v_v(_dg, _p));
-				// h = h + tmp - hdg_sdg * s^T - s * hdg_sdg^T
+				const double sd = 1.0 / s_d;
+				// p = hd = h * d = d^T * h (h - symmetric matrix)
+				_mull_m_v(_h, _d, _p);
+				// p = hd_sd = hd * sd
+				_mull_v_a(_p, sd);
+				// tmp = sd * (1 + d^T * hd_sd)
+				const double tmp = sd * (1.0 + _mull_v_v(_d, _p));
+				// h = h + tmp - hd_sd * s^T - s * hd_sd^T
 				if (_memory_save)
 				{
 					// h - symmetric matrix
@@ -836,11 +834,11 @@ public:
 					// | - - - 3 |
 					uint32_t k = 0;
 					for (; k < _n; ++k)
-						_h[k] += _tv[k] * (tmp * _tv[k] - 2.0 * _p[k]);
+						_h[k] += _s[k] * (tmp * _s[k] - 2.0 * _p[k]);
 					for (uint32_t i = 1; i < _n; ++i)
 					{
 						for (uint32_t j = i; j < _n; ++j, ++k)
-							_h[k] += tmp * _tv[j] * _tv[j - i] - _p[j] * _tv[j - i] - _tv[j] * _p[j - i];
+							_h[k] += tmp * _s[j] * _s[j - i] - _p[j] * _s[j - i] - _s[j] * _p[j - i];
 					}
 				}
 				else
@@ -851,7 +849,7 @@ public:
 						for (uint32_t j = 0; j < i; ++j, ++m)
 							_h[m] = _h[j * _n + i];
 						for (uint32_t j = i; j < _n; ++j, ++m)
-							_h[m] += tmp * _tv[i] * _tv[j] - _p[i] * _tv[j] - _tv[i] * _p[j];
+							_h[m] += tmp * _s[i] * _s[j] - _p[i] * _s[j] - _s[i] * _p[j];
 					}
 				}
 			}

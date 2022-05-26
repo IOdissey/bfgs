@@ -210,9 +210,10 @@ Defaul: `false`.
 > bfgs.set_line_force_num(true);
 > ```
 
-> **line_force_num**<br/>
+> **lbfgs_m**<br/>
 History size for lbfgs version. If `0` then the regular version is used.<br/>
-The memory size is proportional to `2 * (n * m + n + m)`.<br/>
+The memory size is proportional to:<br/>
+`2 * (n * m + n + m)`.<br/>
 Defaul: `0`.
 > ```
 > bfgs.set_lbfgs_m(0);
