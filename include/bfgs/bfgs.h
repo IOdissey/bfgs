@@ -780,7 +780,7 @@ public:
 					break;
 				// d = g
 				// _swap_p(_g, _d);
-				_copy_p(_g, _d);
+				_copy_v(_g, _d);
 				// s = x
 				_copy_v(x, _s);
 				// Line search.
