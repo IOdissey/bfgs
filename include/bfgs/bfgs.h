@@ -46,7 +46,7 @@ private:
 	uint32_t _lbfgs_m = 0;          // History size for lbfgs version. If 0 then the regular version is used.
 	
 	// Diagonal matrix.
-	void _diag(double* m, const double val = 1.0) const
+	void _diag(double* const m, const double val = 1.0) const
 	{
 		if (_memory_save)
 		{
@@ -68,7 +68,7 @@ private:
 	}
 
 	// L2 norm.
-	double _norm(const double* v) const
+	double _norm(const double* const v) const
 	{
 		double r = 0.0;
 		for (uint32_t i = 0; i < _n; ++i)
@@ -77,7 +77,7 @@ private:
 	}
 
 	// r = m * v.
-	void _mull_m_v(const double* m, const double* v, double* r) const
+	void _mull_m_v(const double* m, const double* const v, double* const r) const
 	{
 		if (_memory_save)
 		{
@@ -109,21 +109,21 @@ private:
 	}
 
 	// r = v1 + a * v2.
-	inline void _add_v_av(const double* v1, const double* v2, const double& a, double* r) const
+	inline void _add_v_av(const double* const v1, const double* const v2, const double& a, double* const r) const
 	{
 		for (uint32_t i = 0; i < _n; ++i)
 			r[i] = v1[i] + a * v2[i];
 	}
 
 	// v1 = v1 + a * v2
-	inline void _add_v_av(double* v1, const double* v2, const double& a) const
+	inline void _add_v_av(double* const v1, const double* const v2, const double& a) const
 	{
 		for (uint32_t i = 0; i < _n; ++i)
 			v1[i] += a * v2[i];
 	}
 
 	// r = v1^T * v2.
-	inline double _mull_v_v(const double* v1, const double* v2) const
+	inline double _mull_v_v(const double* const v1, const double* const v2) const
 	{
 		double r = 0.0;
 		for (uint32_t i = 0; i < _n; ++i)
@@ -132,7 +132,7 @@ private:
 	}
 
 	// r = v.
-	inline void _copy_v(const double* v, double* const r) const
+	inline void _copy_v(const double* const v, double* const r) const
 	{
 		std::memcpy(r, v, _n * sizeof(double));
 	}
@@ -729,8 +729,7 @@ public:
 				_h[_lbfgs_i] = 1.0 / sd;
 				// Step update.
 				// gamma = (s^T * d) / (d^T * d)
-				double gamma = sd / _mull_v_v(di, di);
-				// double gamma = 1.0;
+				const double gamma = sd / _mull_v_v(di, di);
 				// p = g
 				// _swap_p(_g, _p);
 				_copy_v(_g, _p);
