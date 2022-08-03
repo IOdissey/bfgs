@@ -766,7 +766,8 @@ public:
 		else
 		{
 			// Limit the number of iterations.
-			for (uint32_t iter = 0; iter < _max_iter; ++iter)
+			uint32_t iter = 0;
+			for (; iter < _max_iter; ++iter)
 			{
 				// p = h * g
 				_mull_m_v(_h, _g, _p);
@@ -852,6 +853,9 @@ public:
 					}
 				}
 			}
+			// If the algorithm fails.
+			if (_reuse_hessian && iter == _max_iter)
+				_diag(_h);
 		}
 		// y = f(х)
 		return y;
