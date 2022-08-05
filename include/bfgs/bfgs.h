@@ -39,6 +39,7 @@ private:
 	const double _db = 2.0;         // Upper bound increment multiplier.
 	double _step_tweak = 0.0;       // Initial step value tweak (if _step_tweak > 0.0).
 	bool _reuse_hessian = false;    // Reuse hessian from last time.
+	bool _select_hessian = false;   // Selection of the initial approximation of the inverse hessian.
 	bool _memory_save = false;      // Store only the upper triangular matrix for the inverse hessian.
 	bool _use_strong_wolfe = true;  // Use Strong Wolfe conditions.
 	uint32_t _dval_size = 100;      // Specifies the amount of memory for automatic derivative with dynamic dimension.
@@ -503,6 +504,7 @@ private:
 				gb = gi;
 			}
 		}
+		// TODO. Check fails (line_iter == _line_iter_max).
 		return y - fi;
 	}
 
@@ -624,6 +626,13 @@ public:
 			_memory_save = memory_save;
 			_free_ptr();
 		}
+	}
+
+	// Selection of the initial approximation of the inverse hessian.
+	// Default: false.
+	void set_select_hessian(bool select_hessian)
+	{
+		_select_hessian = select_hessian;
 	}
 
 	// Use Strong Wolfe conditions.
@@ -811,12 +820,25 @@ public:
 				// The gradient increment.
 				// d = g - d.
 				_sub_v_v(_g, _d, _d);
-				// s = x - tv
+				// s = x - s
 				_sub_v_v(x, _s, _s);
 				// sd = s^T * d
 				const double s_d = _mull_v_v(_s, _d);
 				if (s_d < _eps)
 					continue;
+				// Selection of the initial approximation of the inverse hessian.
+				// Equation (6.20) in the book "Numerical Optimization" by Nocedal and Wright (second edition).
+				if (iter == 0 && _select_hessian && !_reuse_hessian)
+				{
+					const double d_d = _mull_v_v(_d, _d);
+					double gamma = s_d / d_d;
+					// TODO. Threshold?
+					if (gamma < 1e-3)
+						gamma = 1e-3;
+					else if (gamma > 1e3)
+						gamma = 1e3;
+					_diag(_h, gamma);
+				}
 				const double sd = 1.0 / s_d;
 				// p = hd = h * d = d^T * h (h - symmetric matrix)
 				_mull_m_v(_h, _d, _p);

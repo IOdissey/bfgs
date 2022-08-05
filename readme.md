@@ -186,6 +186,13 @@ Default: `false`.
 > bfgs.set_memory_save(true);
 > ```
 
+> **select_hessian**<br/>
+Selection of the initial approximation of the inverse hessian.<br/>
+Default: `false`.
+> ```
+> bfgs.set_select_hessian(true);
+> ```
+
 > **strong_wolfe**<br/>
 Use the strong Wolfe conditions (`true`).<br/>
 Use the normal Wolfe condition (`false`).<br/>
