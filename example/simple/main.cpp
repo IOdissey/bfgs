@@ -2,6 +2,7 @@
 #include <string>
 #include <chrono>
 
+#define BFGS_NO_AUTO
 #include <bfgs/bfgs.h>
 #include <bfgs/dval.h>
 
@@ -79,7 +80,7 @@ int main()
 		auto f = [&fun_call](const DVal<2>* const x, uint32_t n) -> DVal<2>
 		{
 			++fun_call;
-			return x[0] * x[0] + x[1] * x[1] + x[0] + 2 * x[1];
+			return std::log10(x[0] * x[0]) + x[1] * x[1] + x[0] + 2 * x[1];
 		};
 		const uint32_t n = 2;
 		double x[n] = {0.0, 0.0};
