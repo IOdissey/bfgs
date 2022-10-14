@@ -19,12 +19,12 @@ The automatic derivative is an experimental option. Often this does not give adv
 ## Usage
 
 Include header
-```
+```cpp
 #include <bfgs/bfgs.h>
 ```
 
 Create and configure BFGS class
-```
+```cpp
 BFGS bfgs;
 bfgs.set_grad_eps(1e-8);
 bfgs.set_stop_grad_eps(1e-7);
@@ -33,7 +33,7 @@ bfgs.set_max_iter(1000);
 ```
 
 Create the problem and solve it
-```
+```cpp
 auto f = [](const double* const x, int n) -> double
 {
     return x[0] * x[0] + x[1] * x[1] + x[0] + 2 * x[1];
@@ -44,7 +44,7 @@ double y = bfgs.find_min(f, x, n);
 ```
 
 You can use analytic derivatives
-```
+```cpp
 auto f = [](const double* const x, double* const g, int n) -> double
 {
     g[0] = 2 * x[0] + 1;
@@ -57,7 +57,7 @@ double y = bfgs.find_min(f, x, n);
 ```
 
 You can use automatic derivatives with fixed dimension.
-```
+```cpp
 auto f = [](const DVal<2>* const x, uint32_t n) -> DVal<2>
 {
     return x[0] * x[0] + x[1] * x[1] + x[0] + 2 * x[1];
@@ -68,7 +68,7 @@ double y = bfgs.find_min_auto<2>(f, x, n);
 ```
 
 You can use automatic derivatives with dynamic dimension.
-```
+```cpp
 auto f = [](const DVal<0>* const x, uint32_t n) -> DVal<0>
 {
     return x[0] * x[0] + x[1] * x[1] + x[0] + 2 * x[1];
@@ -78,6 +78,11 @@ double x[n] = {0.0, 0.0};
 double y = bfgs.find_min_auto(f, x, n);
 ```
 
+If automatic derivatives are not needed, it can be disabled with a macro `BFGS_NO_AUTO`.
+```cpp
+#define BFGS_NO_AUTO
+#include <bfgs/bfgs.h>
+```
 
 ## Example
 * [simple examples](example/simple)
