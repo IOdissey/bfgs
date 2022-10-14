@@ -135,7 +135,7 @@ Default: `100`.
 > ```
 
 > **central_diff**<br/>
-Only for the case of a numerical derivative.<br/>>
+Only for the case of a numerical derivative.<br/>
 Use central difference or forward difference for the gradient.<br/>
 Default: `true`.
 > ```
