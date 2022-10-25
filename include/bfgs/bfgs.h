@@ -901,7 +901,7 @@ public:
 		if (n != N)
 			return std::numeric_limits<double>::infinity();
 		_line_force_num = false;
-		DVal<N> dval[n];
+		DVal<N> dval[N];
 		for (uint32_t i = 0; i < n; ++i)
 			dval[i].set(x[i], i);
 		DVal<N>* ptr = dval;
