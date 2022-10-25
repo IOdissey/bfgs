@@ -925,10 +925,11 @@ public:
 		Memory mem(n, _dval_size);
 		auto g = [&mem, &f](const double* const x, double* const g, uint32_t n) -> double
 		{
-			DVal<0> dval[n];
+			DVal<0>* dval = new DVal<0>[n];
 			for (uint32_t i = 0; i < n; ++i)
 				dval[i].set(x[i], i, &mem);
 			DVal<0> r = f(dval, n);
+			delete[] dval;
 			for (uint32_t i = 0; i < n; ++i)
 				g[i] = r.d[i + 1];
 			return r.d[0];
