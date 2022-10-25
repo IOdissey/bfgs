@@ -902,7 +902,7 @@ public:
 			return std::numeric_limits<double>::infinity();
 		_line_force_num = false;
 		DVal<N> dval[N];
-		for (uint32_t i = 0; i < n; ++i)
+		for (uint32_t i = 0; i < N; ++i)
 			dval[i].set(x[i], i);
 		DVal<N>* ptr = dval;
 		auto g = [&f, ptr](const double* const x, double* const g, const uint32_t n) -> double
