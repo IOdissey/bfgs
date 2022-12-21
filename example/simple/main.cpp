@@ -2,8 +2,8 @@
 #include <string>
 #include <chrono>
 
+#define BFGS_AUTO
 #include <bfgs/bfgs.h>
-#include <bfgs/dval.h>
 
 
 void print(const std::string& name, double y, const double* const x, int n, int fun_call)
@@ -59,6 +59,7 @@ int main()
 		print("x1^2 + x2^2 + x1 + 2 * x2 (analytic)", y, x, n, fun_call);
 	}
 
+#ifdef BFGS_AUTO
 	// Automatic derivative (dynamic dimension).
 	{
 		uint32_t fun_call = 0;
@@ -86,6 +87,7 @@ int main()
 		double y = bfgs.find_min_auto<2>(f, x, n);
 		print("x1^2 + x2^2 + x1 + 2 * x2 (fixed dimension)", y, x, n, fun_call);
 	}
+#endif
 
 	return 0;
 }

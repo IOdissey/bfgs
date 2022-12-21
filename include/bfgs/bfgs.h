@@ -9,7 +9,7 @@
 #include <functional>
 #include <limits>
 
-#ifndef BFGS_NO_AUTO
+#ifdef BFGS_AUTO
 #include "dval.h"
 #include "memory.h"
 #endif
@@ -894,7 +894,7 @@ public:
 		return find_min(f, x, n);
 	}
 
-#ifndef BFGS_NO_AUTO
+#ifdef BFGS_AUTO
 	template <uint32_t N>
 	double find_min_auto(const std::function<DVal<N> (DVal<N>*, uint32_t)>& f, double* const x, const uint32_t n = N)
 	{

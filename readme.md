@@ -56,6 +56,12 @@ double x[n] = {0.0, 0.0};
 double y = bfgs.find_min(f, x, n);
 ```
 
+It is possible to use automatic derivatives. It can be enabled with a macro `BFGS_AUTO` before include.
+```cpp
+#define BFGS_AUTO
+#include <bfgs/bfgs.h>
+```
+
 You can use automatic derivatives with fixed dimension.
 ```cpp
 auto f = [](const DVal<2>* const x, uint32_t n) -> DVal<2>
@@ -78,11 +84,6 @@ double x[n] = {0.0, 0.0};
 double y = bfgs.find_min_auto(f, x, n);
 ```
 
-If automatic derivatives are not needed, it can be disabled with a macro `BFGS_NO_AUTO`.
-```cpp
-#define BFGS_NO_AUTO
-#include <bfgs/bfgs.h>
-```
 
 ## Example
 * [simple examples](example/simple)
@@ -146,7 +147,7 @@ Default: `true`.
 Only for the case of a numerical derivative.<br/>
 Use central difference or forward difference for the line serach.<br/>
 Maybe we don't want too much precision here.<br/>
-You can try it to reduce the number of function calls (set to false).<br/>
+You can try it to reduce the number of function calls (set to `false`).<br/>
 Default: `true`.
 > ```
 > bfgs.set_line_central_diff(false);
@@ -165,7 +166,7 @@ Default: `inf` (not use).
 > **step_tweak**<br/>
 Experimental setting of the first step of the linear search.<br/>
 If set, then the first step of the linear search will be:<br/>
-`a = min(1, step_tweak * (f_min - f) / drad(f))`<br/>
+`a = min(1, step_tweak * (f_min - f) / grad(f))`<br/>
 Default: `0.0` (not use step_tweak if <= `0.0`)
 > ```
 > bfgs.set_step_tweak(2.0);

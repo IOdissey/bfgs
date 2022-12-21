@@ -1,7 +1,7 @@
 #include <dlib/optimization.h>
 
+#define BFGS_AUTO
 #include <bfgs/bfgs.h>
-#include <bfgs/dval.h>
 
 
 int _fun_call = 0;
@@ -38,6 +38,7 @@ public:
 		return _f(x[0], x[1]);
 	}
 
+#ifdef BFGS_AUTO
 	DVal<0> operator()(const DVal<0>* const x, uint32_t n) const
 	{
 		return _f(x[0], x[1]);
@@ -48,6 +49,7 @@ public:
 	{
 		return _f(x[0], x[1]);
 	}
+#endif
 };
 
 
@@ -80,6 +82,7 @@ public:
 		return _f(x[0], x[1]);
 	}
 
+#ifdef BFGS_AUTO
 	DVal<0> operator()(const DVal<0>* const x, uint32_t n) const
 	{
 		return _f(x[0], x[1]);
@@ -90,6 +93,7 @@ public:
 	{
 		return _f(x[0], x[1]);
 	}
+#endif
 };
 
 template <typename fun>
@@ -178,6 +182,7 @@ void test(const fun& f)
 			std::cout << bfgs_point[i] << std::endl;
 	}
 
+#ifdef BFGS_AUTO
 	{
 		bfgs.set_lbfgs_m(0);
 		const uint32_t n = 2;
@@ -223,6 +228,7 @@ void test(const fun& f)
 		for (int i = 0; i < n; ++i)
 			std::cout << bfgs_point[i] << std::endl;
 	}
+#endif
 
 	std::cout << std::endl;
 }
