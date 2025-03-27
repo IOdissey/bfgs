@@ -56,6 +56,8 @@ double x[n] = {0.0, 0.0};
 double y = bfgs.find_min(f, x, n);
 ```
 
+## Automatic derivatives
+
 It is possible to use automatic derivatives.
 ```cpp
 #include <bfgs/bfgs_ad.h>
