@@ -56,10 +56,18 @@ double x[n] = {0.0, 0.0};
 double y = bfgs.find_min(f, x, n);
 ```
 
-It is possible to use automatic derivatives. It can be enabled with a macro `BFGS_AUTO` before include.
+It is possible to use automatic derivatives.
 ```cpp
-#define BFGS_AUTO
-#include <bfgs/bfgs.h>
+#include <bfgs/bfgs_ad.h>
+```
+
+Create and configure BFGS_AD class
+```cpp
+BFGS_AD bfgs;
+bfgs.set_grad_eps(1e-8);
+bfgs.set_stop_grad_eps(1e-7);
+bfgs.set_stop_step_eps(1e-7);
+bfgs.set_max_iter(1000);
 ```
 
 You can use automatic derivatives with fixed dimension.
@@ -207,14 +215,6 @@ Defaul: `true`.
 > bfgs.set_strong_wolfe(true);
 > ```
 
-> **dval_size**<br/>
-Specifies the amount of memory for automatic derivative with dynamic dimension.<br/>
-If set to `0` then memory is not reserved in advance (may be slower).<br/>
-Defaul: `100`.
-> ```
-> bfgs.set_dval_size(100);
-> ```
-
 > **line_force_num**<br/>
 Force use of numerical derivative in linear search for the case of an analytic derivative.<br/>
 In the case when the gradient is not needed when calling the function, the gradient pointer will be `nullptr`.<br/>
@@ -230,4 +230,13 @@ The memory size is proportional to:<br/>
 Defaul: `0`.
 > ```
 > bfgs.set_lbfgs_m(0);
+> ```
+
+> **dval_size**<br/>
+Specifies the amount of memory for automatic derivative with dynamic dimension.<br/>
+Only for BFGS_AD class.<br/>
+If set to `0` then memory is not reserved in advance (may be slower).<br/>
+Defaul: `100`.
+> ```
+> bfgs.set_dval_size(100);
 > ```

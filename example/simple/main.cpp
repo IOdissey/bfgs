@@ -2,8 +2,8 @@
 #include <string>
 #include <chrono>
 
-#define BFGS_AUTO
 #include <bfgs/bfgs.h>
+#include <bfgs/bfgs_ad.h>
 
 
 void print(const std::string& name, double y, const double* const x, int n, int fun_call)
@@ -23,7 +23,6 @@ int main()
 	bfgs.set_stop_grad_eps(1e-7);
 	bfgs.set_stop_step_eps(1e-7);
 	bfgs.set_max_iter(1000);
-	bfgs.set_dval_size(20);
 
 	// Numerical derivative.
 	{
@@ -59,7 +58,14 @@ int main()
 		print("x1^2 + x2^2 + x1 + 2 * x2 (analytic)", y, x, n, fun_call);
 	}
 
-#ifdef BFGS_AUTO
+	// Version with automatic derivatives.
+	BFGS_AD bfgs_ad;
+	bfgs_ad.set_grad_eps(1e-8);
+	bfgs_ad.set_stop_grad_eps(1e-7);
+	bfgs_ad.set_stop_step_eps(1e-7);
+	bfgs_ad.set_max_iter(1000);
+	bfgs_ad.set_dval_size(20);
+
 	// Automatic derivative (dynamic dimension).
 	{
 		uint32_t fun_call = 0;
@@ -70,7 +76,7 @@ int main()
 		};
 		const uint32_t n = 2;
 		double x[n] = {0.0, 0.0};
-		double y = bfgs.find_min_auto(f, x, n);
+		double y = bfgs_ad.find_min_auto(f, x, n);
 		print("x1^2 + x2^2 + x1 + 2 * x2 (dynamic dimension)", y, x, n, fun_call);
 	}
 
@@ -84,10 +90,9 @@ int main()
 		};
 		const uint32_t n = 2;
 		double x[n] = {0.0, 0.0};
-		double y = bfgs.find_min_auto<2>(f, x, n);
+		double y = bfgs_ad.find_min_auto<2>(f, x, n);
 		print("x1^2 + x2^2 + x1 + 2 * x2 (fixed dimension)", y, x, n, fun_call);
 	}
-#endif
 
 	return 0;
 }

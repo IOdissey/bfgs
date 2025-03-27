@@ -1,7 +1,8 @@
 #include <dlib/optimization.h>
 
-#define BFGS_AUTO
 #include <bfgs/bfgs.h>
+#include <bfgs/bfgs_ad.h>
+#include <bfgs/dval.h>
 
 
 int _fun_call = 0;
@@ -38,7 +39,6 @@ public:
 		return _f(x[0], x[1]);
 	}
 
-#ifdef BFGS_AUTO
 	DVal<0> operator()(const DVal<0>* const x, uint32_t n) const
 	{
 		return _f(x[0], x[1]);
@@ -49,7 +49,6 @@ public:
 	{
 		return _f(x[0], x[1]);
 	}
-#endif
 };
 
 
@@ -82,7 +81,6 @@ public:
 		return _f(x[0], x[1]);
 	}
 
-#ifdef BFGS_AUTO
 	DVal<0> operator()(const DVal<0>* const x, uint32_t n) const
 	{
 		return _f(x[0], x[1]);
@@ -93,7 +91,6 @@ public:
 	{
 		return _f(x[0], x[1]);
 	}
-#endif
 };
 
 template <typename fun>
@@ -182,12 +179,19 @@ void test(const fun& f)
 			std::cout << bfgs_point[i] << std::endl;
 	}
 
-#ifdef BFGS_AUTO
+	// Version with automatic derivatives.
+	BFGS_AD bfgs_ad;
+	bfgs_ad.set_grad_eps(1e-8);
+	bfgs_ad.set_stop_grad_eps(1e-7);
+	bfgs_ad.set_stop_step_eps(1e-7);
+	bfgs_ad.set_max_iter(1000);
+	bfgs_ad.set_line_central_diff(false);
+
 	{
-		bfgs.set_lbfgs_m(0);
+		bfgs_ad.set_lbfgs_m(0);
 		const uint32_t n = 2;
 		double bfgs_point[n] = {-1.0, -1.0};
-		double bfgs_y = bfgs.find_min_auto(f, bfgs_point, n);
+		double bfgs_y = bfgs_ad.find_min_auto(f, bfgs_point, n);
 
 		auto beg = std::chrono::steady_clock::now();
 		for (int i = 0; i < iter; ++i)
@@ -195,7 +199,7 @@ void test(const fun& f)
 			_fun_call = 0;
 			bfgs_point[0] = -1.0;
 			bfgs_point[1] = -1.0;
-			bfgs_y = bfgs.find_min_auto(f, bfgs_point, n);
+			bfgs_y = bfgs_ad.find_min_auto(f, bfgs_point, n);
 		}
 		auto end = std::chrono::steady_clock::now();
 		double dt = std::chrono::duration_cast<std::chrono::nanoseconds>(end - beg).count() * 1e-9;
@@ -207,10 +211,10 @@ void test(const fun& f)
 	}
 
 	{
-		bfgs.set_lbfgs_m(0);
+		bfgs_ad.set_lbfgs_m(0);
 		const uint32_t n = 2;
 		double bfgs_point[n] = {-1.0, -1.0};
-		double bfgs_y = bfgs.find_min_auto<2>(f, bfgs_point, n);
+		double bfgs_y = bfgs_ad.find_min_auto<2>(f, bfgs_point, n);
 
 		auto beg = std::chrono::steady_clock::now();
 		for (int i = 0; i < iter; ++i)
@@ -218,7 +222,7 @@ void test(const fun& f)
 			_fun_call = 0;
 			bfgs_point[0] = -1.0;
 			bfgs_point[1] = -1.0;
-			bfgs_y = bfgs.find_min_auto<2>(f, bfgs_point, n);
+			bfgs_y = bfgs_ad.find_min_auto<2>(f, bfgs_point, n);
 		}
 		auto end = std::chrono::steady_clock::now();
 		double dt = std::chrono::duration_cast<std::chrono::nanoseconds>(end - beg).count() * 1e-9;
@@ -228,7 +232,6 @@ void test(const fun& f)
 		for (int i = 0; i < n; ++i)
 			std::cout << bfgs_point[i] << std::endl;
 	}
-#endif
 
 	std::cout << std::endl;
 }

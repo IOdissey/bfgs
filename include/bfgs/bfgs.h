@@ -9,14 +9,10 @@
 #include <functional>
 #include <limits>
 
-#ifdef BFGS_AUTO
-#include "dval.h"
-#include "memory.h"
-#endif
 
 class BFGS
 {
-private:
+protected:
 	uint32_t _n = 0;                // Problem dimension.
 	double* _ptr = nullptr;         // Memory for all value.
 	double* _g = nullptr;           // The gradient value.
@@ -43,10 +39,12 @@ private:
 	bool _select_hessian = false;   // Selection of the initial approximation of the inverse hessian.
 	bool _memory_save = false;      // Store only the upper triangular matrix for the inverse hessian.
 	bool _use_strong_wolfe = true;  // Use Strong Wolfe conditions.
-	uint32_t _dval_size = 100;      // Specifies the amount of memory for automatic derivative with dynamic dimension.
 	bool _line_force_num = false;   // Force use of numerical derivative in linear search for the case of an analytic derivative.
 	uint32_t _lbfgs_m = 0;          // History size for lbfgs version. If 0 then the regular version is used.
-	
+	uint32_t _iter = 0;             //
+	double _initial_hessian = 1.0;  // Initial value for the hessian.
+	bool _ext_hessian = false;      // External hessian.
+
 	// Diagonal matrix.
 	void _diag(double* const m, const double val = 1.0) const
 	{
@@ -210,13 +208,13 @@ private:
 			{
 				_s = _d + _n;
 				_h = _s + _n;
-				_diag(_h);
+				_diag(_h, _initial_hessian);
 			}
 		}
 		else if (_lbfgs_m > 0)
 			_lbfgs_i = 0;
-		else if (!_reuse_hessian)
-			_diag(_h);
+		else if (!_reuse_hessian && !_ext_hessian)
+			_diag(_h, _initial_hessian);
 	}
 
 	// Cubic approximation for finding the minimum.
@@ -289,7 +287,7 @@ private:
 			double* const xa,
 			double& fa,
 			double& ga,
-			double* const g)
+			double* const) // g
 	{
 		if (_line_central_diff)
 		{
@@ -350,7 +348,7 @@ private:
 		}
 	}
 
-	inline double _f_info(const std::function<double (double*, uint32_t)>& f, double* const x, double* const g) const
+	inline double _f_info(const std::function<double (double*, uint32_t)>& f, double* const x, double* const) const
 	{
 		double y = f(x, _n);
 		_f_grad(f, y, x, _g);
@@ -390,7 +388,7 @@ private:
 		}
 	}
 
-	inline void _f_grad(const std::function<double (double*, double*, uint32_t)>& f, const double& y, double* const x, double* const g) const
+	inline void _f_grad(const std::function<double (double*, double*, uint32_t)>& f, const double&, double* const x, double* const g) const
 	{
 		if (_line_force_num)
 			f(x, g, _n);
@@ -643,13 +641,6 @@ public:
 		_use_strong_wolfe = use_strong_wolfe;
 	}
 
-	// Specifies the amount of memory for automatic derivative with dynamic dimension.
-	// Defaul: 100.
-	void set_dval_size(uint32_t dval_size)
-	{
-		_dval_size = dval_size;
-	}
-
 	// Force use of numerical derivative in linear search for the case of an analytic derivative.
 	// Defaul: false.
 	void set_line_force_num(bool line_force_num)
@@ -669,6 +660,40 @@ public:
 		}
 	}
 
+	// Set initial hessian to b * I.
+	// Defaul: 1.
+	void set_initial_hessian(double b)
+	{
+		_initial_hessian = b;
+	}
+
+	// Set initial hessian as diagonal matrix.
+	// Called before find_min.
+	void set_initial_hessian(double* h, uint32_t n)
+	{
+		if (_lbfgs_m > 0 || _reuse_hessian)
+			return;
+		_init_ptr(n);
+		_ext_hessian = true;
+		if (_memory_save)
+		{
+			for (uint32_t i = 0; i < n; ++i)
+				_h[i] = h[i];
+		}
+		else
+		{
+			const uint32_t step = n + 1;
+			for (uint32_t i = 0, j = 0; i < n; ++i, j += step)
+				_h[j] = h[i];
+		}
+	}
+
+	// Number of iterations.
+	uint32_t get_iter() const
+	{
+		return _iter;
+	}
+
 	// Search for the function minimum.
 	// f - minimized function
 	//    numerical derivative: double f(double* x, uint32_t n)
@@ -683,6 +708,7 @@ public:
 			return std::numeric_limits<double>::infinity();
 		//
 		_init_ptr(n);
+		_ext_hessian = false;
 		// Function value and derivatives.
 		// y = f(x)
 		// g = grad(f(x))
@@ -693,7 +719,7 @@ public:
 			// p = g
 			_copy_v(_g, _p);
 			// Limit the number of iterations.
-			for (uint32_t iter = 0; iter < _max_iter; ++iter)
+			for (_iter = 0; _iter < _max_iter; ++_iter)
 			{
 				// p = -p
 				for (uint32_t i = 0; i < _n; ++i)
@@ -744,7 +770,7 @@ public:
 				// _swap_p(_g, _p);
 				_copy_v(_g, _p);
 				//
-				const uint32_t m = std::min(iter + 1, _lbfgs_m);
+				const uint32_t m = std::min(_iter + 1, _lbfgs_m);
 				for (uint32_t i = 0; i < m; ++i)
 				{
 					const uint32_t idx = _lbfgs_get_idx(i);
@@ -776,8 +802,7 @@ public:
 		else
 		{
 			// Limit the number of iterations.
-			uint32_t iter = 0;
-			for (; iter < _max_iter; ++iter)
+			for (_iter = 0; _iter < _max_iter; ++_iter)
 			{
 				// p = h * g
 				_mull_m_v(_h, _g, _p);
@@ -825,11 +850,15 @@ public:
 				_sub_v_v(x, _s, _s);
 				// sd = s^T * d
 				const double s_d = _mull_v_v(_s, _d);
+				// TODO. Bad case.
 				if (s_d < _eps)
+				{
+					_diag(_h);
 					continue;
+				}
 				// Selection of the initial approximation of the inverse hessian.
 				// Equation (6.20) in the book "Numerical Optimization" by Nocedal and Wright (second edition).
-				if (iter == 0 && _select_hessian && !_reuse_hessian)
+				if (_iter == 0 && _select_hessian && !_reuse_hessian)
 				{
 					const double d_d = _mull_v_v(_d, _d);
 					double gamma = s_d / d_d;
@@ -877,7 +906,7 @@ public:
 				}
 			}
 			// If the algorithm fails.
-			if (_reuse_hessian && iter == _max_iter)
+			if (_reuse_hessian && _iter == _max_iter)
 				_diag(_h);
 		}
 		// y = f(х)
@@ -893,48 +922,4 @@ public:
 	{
 		return find_min(f, x, n);
 	}
-
-#ifdef BFGS_AUTO
-	template <uint32_t N>
-	double find_min_auto(const std::function<DVal<N> (DVal<N>*, uint32_t)>& f, double* const x, const uint32_t n = N)
-	{
-		if (n != N)
-			return std::numeric_limits<double>::infinity();
-		_line_force_num = false;
-		DVal<N> dval[N];
-		for (uint32_t i = 0; i < N; ++i)
-			dval[i].set(x[i], i);
-		DVal<N>* ptr = dval;
-		auto g = [&f, ptr](const double* const x, double* const g, const uint32_t n) -> double
-		{
-			for (uint32_t i = 0; i < n; ++i)
-				ptr[i].set(x[i]);
-			const DVal<N> r = f(ptr, n);
-			for (uint32_t i = 0; i < n; ++i)
-				g[i] = r.d[i + 1];
-			return r.d[0];
-		};
-		return find_min(g, x, n);
-	}
-
-	double find_min_auto(const std::function<DVal<0> (DVal<0>*, uint32_t)>& f, double* const x, const uint32_t n)
-	{
-		if (n == 0)
-			return std::numeric_limits<double>::infinity();
-		_line_force_num = false;
-		Memory mem(n, _dval_size);
-		auto g = [&mem, &f](const double* const x, double* const g, uint32_t n) -> double
-		{
-			DVal<0>* dval = new DVal<0>[n];
-			for (uint32_t i = 0; i < n; ++i)
-				dval[i].set(x[i], i, &mem);
-			DVal<0> r = f(dval, n);
-			delete[] dval;
-			for (uint32_t i = 0; i < n; ++i)
-				g[i] = r.d[i + 1];
-			return r.d[0];
-		};
-		return find_min(g, x, n);
-	}
-#endif
 };
